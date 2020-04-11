@@ -12,13 +12,13 @@ class Coronaparser:
         if grouptoken:
             import vk_api
             self.vk_session = vk_api.VkApi(token=self.grouptoken)
-            self.vk = self.vk_session.get_api(country=country)
+            self.vk = self.vk_session.get_api()
             self.groupid = groupid
     
     def generate_new(self, country=None):
         while True:
             if self.grouptoken:
-                self.post_image_to_vk()
+                self.post_image_to_vk(country=country)
                 continue
             self.generate_image(country)
             time.sleep(self.delay * 60)
