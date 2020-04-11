@@ -38,7 +38,7 @@ class Coronaparser:
                 sorted_stats = [stat.text for stat in list(country_stats)[:8] if isinstance(stat, Tag)][1:] #gets stats from country table, cut off the country name
 
                 corona_data[f'{country}_cases'] = sorted_stats[0]
-                corona_data[f'{country}_new'] = sorted_stats[1] if sorted_stats[1] else "0",
+                corona_data[f'{country}_new'] = sorted_stats[1] if sorted_stats[1] else "0"
                 corona_data[f'{country}_deaths']= sorted_stats[2]
             except:
                 raise NameError("The country has not been recognized. Try inputting a different country, perhaps?")
