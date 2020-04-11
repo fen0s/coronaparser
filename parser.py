@@ -1,53 +1,60 @@
 from PIL import Image, ImageDraw, ImageFont
-import vk_api
 import time
 import random
 from bs4 import BeautifulSoup, NavigableString, Tag
 import requests
 
-class Notifier:
+class Coronaparser:
     
-    def __init__(self, delay, grouptoken):
+    def __init__(self, delay=60, grouptoken=None, groupid=None):
         self.delay = delay
         self.grouptoken = grouptoken
-        self.infected = self.get_corona_data().get("cases")
-        self.vk_session = vk_api.VkApi(token=self.grouptoken)
-        self.vk = self.vk_session.get_api()
-        self.check_for_new()
+        if grouptoken:
+            import vk_api
+            self.vk_session = vk_api.VkApi(token=self.grouptoken)
+            self.vk = self.vk_session.get_api()
+            self.groupid = groupid
     
-    def check_for_new(self):
+    def generate_new(self, country=None):
         while True:
-            data = self.get_corona_data()
-            #message = 'Заражённых: {}\nСмертей: {}\nЗаражённых по РФ: {}\nСмертей по РФ: {}\nНовых случаев в РФ: {}\n\nВ С Ё\nС\nЁ '.format(
-                #data.get("cases"), data.get("deaths"), data.get("russia_cases"), data.get("russia_deaths"), data.get("russia_new"))
-            #self.send_new_post(message)
-            self.post_image_to_vk()
-            self.infected = data.get('cases') #update old number of infected
+            if self.grouptoken:
+                self.post_image_to_vk()
+                continue
+            self.generate_image(country)
             time.sleep(self.delay * 60)
     
-    def get_corona_data(self):
+    def get_corona_data(self, country=None):
         html = requests.get('https://www.worldometers.info/coronavirus/').text #get html
         soup = BeautifulSoup(html)
-        main_counters = soup.findAll("div", {"class": "maincounter-number"}) #find all main counters
+        main_counters = soup.findAll("div", {"class": "maincounter-number"}) #find infected, deaths and recovered
         
-        russia_stats = soup.find(string="Russia").parent.parent #find russian table
-        sorted_stats = [stat.text for stat in list(russia_stats)[:8] if isinstance(stat, Tag)] #gets stats from russian table
-        sorted_stats.remove("Russia") #we don't need country name, huh
+        if country:
+            try:
+                country_stats = soup.find(string=country).parent.parent.parent #find country table
+                sorted_stats = [stat.text for stat in list(country_stats)[:8] if isinstance(stat, Tag)][1:] #gets stats from country table, cut off the country name
 
+                corona_data = {'cases': main_counters[0].text,
+                'deaths': main_counters[1].text,
+                'recovered': main_counters[2].text,
+                f'{country}_cases': sorted_stats[0],
+                f'{country}_new': sorted_stats[1] if sorted_stats[1] else "0",
+                f'{country}_deaths': sorted_stats[2],
+                }
+            except:
+                raise NameError("The country has not been recognized. Try inputting a different country, perhaps?")
+
+            return corona_data
         corona_data = {'cases': main_counters[0].text,
-        'deaths': main_counters[1].text,
-        'recovered': main_counters[2].text,
-        'russia_cases': sorted_stats[0],
-        'russia_new': sorted_stats[1],
-        'russia_deaths': sorted_stats[2]}
+                'deaths': main_counters[1].text,
+                'recovered': main_counters[2].text}
         return corona_data
     
-    def post_image_to_vk(self):
+    def post_image_to_vk(self, country=None):
         from io import BytesIO
         import requests
         import json
         
-        image = self.generate_image(self.get_corona_data().get('cases'))
+        image = self.generate_image(country=country)
         fp = BytesIO()
         image.save(fp, format='PNG') #save image to bytes
         
@@ -60,53 +67,36 @@ class Notifier:
         upload_contents = json.loads(post_upload.text) #jsonize the response from post upload
         
         post_save = self.vk.photos.saveWallPhoto(
-        server=upload_contents.get("server"), 
-        hash=upload_contents.get("hash"), 
-        photo=upload_contents.get("photo")) #finally save the photo on vk servers
+        server=upload_contents["server"], 
+        hash=upload_contents["hash"], 
+        photo=upload_contents["photo"]) #finally save the photo on vk servers
 
-        self.vk.wall.post(owner_id=-192535436,
-        attachments="photo" + str(post_save[0].get("owner_id")) + '_'+ str(post_save[0].get('id'))) #format to attach the photo
-        print("[" + time.strftime("%Y.%m.%d %H:%M") + "] Posted a post succesfully.")
+        attachment = "photo" + str(post_save[0].get("owner_id")) + '_'+ str(post_save[0].get('id'))
+        self.vk.wall.post(owner_id=-self.groupid,
+        attachments=attachment)
+        print("[" + time.strftime("%Y.%m.%D %H:%M") + "] Posted a post succesfully.")
     
-    def generate_image(self, infected):
+    def generate_image(self, country=None):
 
-        img = Image.open("stain3.png") #open background
-        d = ImageDraw.Draw(img) #open it as drawable
+        img = Image.open("bg_eng.png") #open background
+        canvas = ImageDraw.Draw(img) #open it as drawable
 
-        font = ImageFont.truetype("arial.ttf", 35) #other things font
-
-        data = self.get_corona_data()
-        message = 'В мире: {}\nСмертей: {}\nВыздоровело:{}\nЗаражённых в РФ: {}\nСмертей в РФ: {}\nНовых случаев в РФ: {}'.format(
-                data.get("cases"), data.get("deaths"), data.get("recovered"), data.get("russia_cases"), data.get("russia_deaths"), data.get("russia_new"))
-        message_list = message.split('\n') #get data set. not the best way, will fix later
-
-        d.text((456, 155), message_list[1], fill=(120,0,120,256), font=font) #number of cases
-        d.text((56, 155), message_list[4], fill=(100,15,20,256), font=font) #number of deaths
-        d.text((249, 155), message_list[7], fill=(0,120,31,256), font=font) #number of recovered
-
-
-        d.text((130,300), message_list[9], fill=(190,190,190,256), font=font) #cases russia
+        font = ImageFont.truetype("font.ttf", 35) #numbers font
         
-        if not message_list[11]: #if there's no new cases, it's empty, so we replace it with 0 for organic look
-            message_list[11] = "0"
-        d.text((130,340), message_list[11], fill=(10,20,190,256), font=font) #new cases russia
-        d.text((130, 380), message_list[10], fill=(190,15,15,256), font=font) #deaths russia
-        
-        font_time = ImageFont.truetype("arial.ttf", 26) #font for time
-        d.text((445,400), time.strftime("%Y.%m.%d %H:%M"), fill=(0,0,0,256), font=font_time) #current time
-        
-        infected = int(infected[:-3].replace(',', '')) #we turn the data into int instead of string
-        infected_past = int(self.infected[:-3].replace(',', ''))
-        difference = infected - infected_past
-        
-        if infected_past != infected:
-            d.text((135,220), f"Прирост за час: {difference} ({round((difference / infected) * 100, 2)}%)", fill=(190,15,15,256), font=font)
-        
+        data = self.get_corona_data(country=country)
+
+        canvas.text((458, 125), data["cases"], fill=(120,0,120), font=font) #number of cases
+        canvas.text((65, 125), data["deaths"], fill=(100,15,20), font=font) #number of deaths
+        canvas.text((255, 125), data["recovered"], fill=(0,120,31), font=font) #number of recovered
+
+        if country:
+            canvas.text((130,300), f"Infected in {country}: " + data[f"{country}_cases"], fill=(190,190,190), font=font) #cases country
+            canvas.text((130,340), f"New cases in {country}: " + data[f"{country}_new"], fill=(10,20,190), font=font) #new cases country
+            canvas.text((130, 380), f"Deaths in {country}: " + data[f"{country}_deaths"], fill=(190,15,15), font=font) #deaths country
+            
+        font_time = ImageFont.truetype("font.ttf", 26) #font for time
+        canvas.text((445,400), time.strftime("%Y.%m.%d %H:%M"), fill=(0,0,0), font=font_time) #current time
+
         img.save('pil_text.png')
+        print('[' + time.strftime("%Y.%m.%d %H:%M") + '] Image generated.')
         return img
-    
-    def send_message(self, msg):
-          self.vk.messages.send(
-                    chat_id=1,
-                    message=msg,
-                    random_id=random.randint(1000000, 1000000000))
