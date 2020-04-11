@@ -28,25 +28,21 @@ class Coronaparser:
         soup = BeautifulSoup(html)
         main_counters = soup.findAll("div", {"class": "maincounter-number"}) #find infected, deaths and recovered
         
+        corona_data = {'cases': main_counters[0].text,
+                'deaths': main_counters[1].text,
+                'recovered': main_counters[2].text}
+        
         if country:
             try:
                 country_stats = soup.find(string=country).parent.parent.parent #find country table
                 sorted_stats = [stat.text for stat in list(country_stats)[:8] if isinstance(stat, Tag)][1:] #gets stats from country table, cut off the country name
 
-                corona_data = {'cases': main_counters[0].text,
-                'deaths': main_counters[1].text,
-                'recovered': main_counters[2].text,
-                f'{country}_cases': sorted_stats[0],
-                f'{country}_new': sorted_stats[1] if sorted_stats[1] else "0",
-                f'{country}_deaths': sorted_stats[2],
-                }
+                corona_data[f'{country}_cases'] = sorted_stats[0]
+                corona_data[f'{country}_new'] = sorted_stats[1] if sorted_stats[1] else "0",
+                corona_data[f'{country}_deaths']= sorted_stats[2]
             except:
                 raise NameError("The country has not been recognized. Try inputting a different country, perhaps?")
-
-            return corona_data
-        corona_data = {'cases': main_counters[0].text,
-                'deaths': main_counters[1].text,
-                'recovered': main_counters[2].text}
+        
         return corona_data
     
     def post_image_to_vk(self, country=None):
