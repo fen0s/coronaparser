@@ -12,7 +12,7 @@ class Coronaparser:
         if grouptoken:
             import vk_api
             self.vk_session = vk_api.VkApi(token=self.grouptoken)
-            self.vk = self.vk_session.get_api()
+            self.vk = self.vk_session.get_api(country=country)
             self.groupid = groupid
     
     def generate_new(self, country=None):
